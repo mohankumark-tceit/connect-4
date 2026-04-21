@@ -2,23 +2,48 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Connect 4 - Strategic Expert AI</title>
+    <title>Connect 4 - Expert AI</title>
     <style>
         :root { --bg: #050505; --player: #00ff88; --ai: #0077ff; --board: #1a1a1a; }
-        body { background: var(--bg); color: white; display: flex; flex-direction: column; align-items: center; font-family: 'Segoe UI', sans-serif; }
-        .board { display: grid; grid-template-columns: repeat(7, 60px); gap: 10px; background: var(--board); padding: 15px; border-radius: 15px; border: 2px solid #333; }
+        
+        /* Flexbox centering for the entire page */
+        body { 
+            background: var(--bg); 
+            color: white; 
+            display: flex; 
+            flex-direction: column; 
+            align-items: center; 
+            justify-content: center; 
+            min-height: 100vh; 
+            margin: 0; 
+            font-family: 'Segoe UI', sans-serif; 
+        }
+
+        .board { 
+            display: grid; 
+            grid-template-columns: repeat(7, 60px); 
+            gap: 10px; 
+            background: var(--board); 
+            padding: 15px; 
+            border-radius: 15px; 
+            border: 2px solid #333;
+            box-shadow: 0 0 30px rgba(0,0,0,0.5);
+        }
+
         .cell { width: 60px; height: 60px; background: #000; border-radius: 50%; cursor: pointer; transition: 0.3s; }
         .cell.player { background: var(--player); box-shadow: 0 0 20px var(--player); }
         .cell.ai { background: var(--ai); box-shadow: 0 0 20px var(--ai); }
-        #status { margin: 25px; font-size: 1.5rem; font-weight: bold; text-transform: uppercase; letter-spacing: 2px; }
-        button { background: transparent; color: white; border: 1px solid #555; padding: 10px 20px; cursor: pointer; border-radius: 5px; }
+        
+        #status { margin-bottom: 25px; font-size: 1.5rem; font-weight: bold; text-transform: uppercase; letter-spacing: 2px; }
+        button { background: transparent; color: white; border: 1px solid #555; padding: 10px 20px; cursor: pointer; border-radius: 5px; margin-top: 25px; }
         button:hover { background: #333; }
     </style>
 </head>
 <body>
+
     <div id="status">Your Turn</div>
     <div class="board" id="board"></div>
-    <button onclick="location.reload()">Reset Game</button>
+    <button onclick="location.reload()">Restart Game</button>
 
     <script>
         const ROWS = 6, COLS = 7, EMPTY = 0, PLAYER = 1, AI = 2;
@@ -48,17 +73,20 @@
             if (isFull()) return endGame("Draw!");
 
             gameActive = false;
-            document.getElementById('status').innerText = "AI is calculating...";
-            setTimeout(aiTurn, 300);
+            document.getElementById('status').innerText = "AI is thinking...";
+            
+            // 1-second delay for "human-like" thinking
+            setTimeout(aiTurn, 1000);
         }
 
         function aiTurn() {
-            // Depth 5 is the sweet spot for browser performance vs intelligence
             let [bestCol] = minimax(board, 5, -Infinity, Infinity, true);
             let r = getOpenRow(bestCol);
             makeMove(r, bestCol, AI);
+            
             if (checkWin(AI)) return endGame("AI Wins!");
             if (isFull()) return endGame("Draw!");
+            
             gameActive = true;
             document.getElementById('status').innerText = "Your Turn";
         }
@@ -75,53 +103,36 @@
 
         function isFull() { return board[0].every(cell => cell !== EMPTY); }
 
-        // --- ENHANCED HEURISTIC ---
-        // Weights: Center columns are much more valuable for strategic control
         function scorePosition(b, p) {
             let score = 0;
-            const centerArray = b.map(row => row[Math.floor(COLS/2)]);
-            score += centerArray.filter(cell => cell === p).length * 3;
-
-            for(let r=0; r<ROWS; r++) {
-                for(let c=0; c<COLS-3; c++) {
-                    let window = b[r].slice(c, c+4);
-                    score += evaluateWindow(window, p);
-                }
-            }
+            // Center column weight
+            score += b.map(row => row[Math.floor(COLS/2)]).filter(x => x === p).length * 3;
+            for(let r=0; r<ROWS; r++) for(let c=0; c<COLS-3; c++) score += evaluateWindow(b[r].slice(c, c+4), p);
             return score;
         }
 
         function evaluateWindow(window, p) {
-            let score = 0;
-            let opp = p === PLAYER ? AI : PLAYER;
-            let pCount = window.filter(x => x === p).length;
-            let eCount = window.filter(x => x === EMPTY).length;
-            let oCount = window.filter(x => x === opp).length;
-
+            let score = 0, opp = p === PLAYER ? AI : PLAYER;
+            let pCount = window.filter(x => x === p).length, eCount = window.filter(x => x === EMPTY).length, oCount = window.filter(x => x === opp).length;
             if (pCount === 4) score += 100;
             else if (pCount === 3 && eCount === 1) score += 5;
-            else if (pCount === 2 && eCount === 2) score += 2;
-            
-            if (oCount === 3 && eCount === 1) score -= 80; // High priority block
+            if (oCount === 3 && eCount === 1) score -= 80;
             return score;
         }
 
         function minimax(b, depth, alpha, beta, isMax) {
             let validCols = [];
             for(let c=0; c<COLS; c++) if(getOpenRow(c) !== -1) validCols.push(c);
-            
             if (depth === 0 || checkWin(PLAYER) || checkWin(AI)) {
                 if (checkWin(AI)) return [null, 10000];
                 if (checkWin(PLAYER)) return [null, -10000];
                 return [null, scorePosition(b, AI)];
             }
-
             let bestCol = validCols[Math.floor(Math.random() * validCols.length)];
             if (isMax) {
                 let maxEval = -Infinity;
                 for (let c of validCols) {
-                    let r = getOpenRow(c);
-                    board[r][c] = AI;
+                    let r = getOpenRow(c); board[r][c] = AI;
                     let val = minimax(board, depth - 1, alpha, beta, false)[1];
                     board[r][c] = EMPTY;
                     if (val > maxEval) { maxEval = val; bestCol = c; }
@@ -132,8 +143,7 @@
             } else {
                 let minEval = Infinity;
                 for (let c of validCols) {
-                    let r = getOpenRow(c);
-                    board[r][c] = PLAYER;
+                    let r = getOpenRow(c); board[r][c] = PLAYER;
                     let val = minimax(board, depth - 1, alpha, beta, true)[1];
                     board[r][c] = EMPTY;
                     if (val < minEval) { minEval = val; bestCol = c; }
